@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase } from '../lib/supabaseClient'
 import SidebarNav from '../components/SidebarNav'
 import Sidebar from '../components/Sidebar'
 import ChatHeader from '../components/ChatHeader'
@@ -48,17 +48,23 @@ export default function ChatsPage() {
   const [loadingChat, setLoadingChat] = useState(false)
 
   // 🔐 Load user session
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const sessionUser = data.session?.user ?? null
-      if (!sessionUser) {
-        router.push('/')
-      } else {
-        setUser(sessionUser)
-        setLoadingUser(false)
-      }
-    })
-  }, [router])
+ useEffect(() => {
+  supabase.auth.getSession().then(({ data, error }) => {
+    console.log('Session result:', data, error)
+
+    const sessionUser = data?.session?.user ?? null
+
+    if (!sessionUser) {
+      console.warn('No user session found, redirecting...')
+      router.push('/')
+    } else {
+      console.log('User session found:', sessionUser)
+      setUser(sessionUser)
+      setLoadingUser(false)
+    }
+  })
+}, [router])
+
 
   // 📩 Load messages + chat metadata + realtime updates
   useEffect(() => {
