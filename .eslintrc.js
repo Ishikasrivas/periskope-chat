@@ -1,15 +1,16 @@
+// .eslintrc.js
 module.exports = {
-  extends: "next/core-web-vitals",
-  plugins: ["@typescript-eslint"],
-  parser: "@typescript-eslint/parser",
+  extends: ['next', 'next/core-web-vitals', 'plugin:@typescript-eslint/recommended'],
+  plugins: ['@typescript-eslint', 'next'],
+  parser: '@typescript-eslint/parser',
   parserOptions: {
-    project: "./tsconfig.json",
-    sourceType: "module",
+    ecmaVersion: 2020,
+    sourceType: 'module',
     ecmaFeatures: {
-      jsx: true
-    }
+      jsx: true,
+    },
   },
   rules: {
-    "@typescript-eslint/no-explicit-any": "off",
-  }
+    // Add your custom rules here
+  },
 };
