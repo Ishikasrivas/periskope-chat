@@ -15,7 +15,6 @@ export default function ChatsPage() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [loadingUser, setLoadingUser] = useState(true)
-
   const router = useRouter()
 
   // 🔐 Load user session
@@ -81,6 +80,27 @@ export default function ChatsPage() {
     }
   }, [selectedChatId])
 
+  // ✅ Move this OUTSIDE of useEffect
+  const onChatClick = async (chatId: string) => {
+    setSelectedChatId(chatId)
+
+    const { data: messagesData } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true })
+
+    setMessages(messagesData || [])
+
+    const { data: chatData } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('id', chatId)
+      .single()
+
+    setSelectedChat(chatData || null)
+  }
+
   // ✉️ Handle message sending
   const handleSend = async (text: string) => {
     if (!user || !selectedChatId) return
@@ -94,49 +114,55 @@ export default function ChatsPage() {
     ])
   }
 
-  // 🕒 Until user is resolved
   if (loadingUser) return <div className="p-6">Loading...</div>
 
   return (
     <div className="flex h-screen">
-      {/* Sidebar */}
-        <div className="flex h-screen">
-    <SidebarNav />
-  </div>
+      {/* Left Sidebar Nav (icons only) */}
+      <SidebarNav />
+
+      {/* Sidebar Chat List */}
       <Sidebar
-      
-        onSelectChat={setSelectedChatId}
+        onSelectChat={onChatClick}
         selectedChatId={selectedChatId}
       />
 
-      {/* Main Chat Window */}
-      <div className="flex flex-col flex-1 bg-[#f0f2f5]">
+      {/* Chat Area */}
+      <div className="flex flex-col flex-1">
         {selectedChatId ? (
-          <>
-            {/* Chat Header */}
-            <ChatHeader chat={selectedChat} />
+          <div className="relative flex flex-col flex-1">
+            {/* Background image */}
+            <div className="absolute inset-0 bg-[url('/bg.png')] bg-cover bg-center opacity-30 z-0 pointer-events-none" />
 
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {messages.map((msg) => (
-                <ChatBubble
-                  key={msg.id}
-                  isSender={msg.sender_id === user.id}
-                  content={msg.content}
-                  timestamp={new Date(msg.created_at).toLocaleTimeString()}
-                />
-              ))}
+            {/* Chat content above the faded background */}
+            <div className="relative z-10 flex flex-col flex-1">
+              {/* Chat Header */}
+              <ChatHeader chat={selectedChat} />
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {messages.map((msg) => (
+                  <ChatBubble
+                    key={msg.id}
+                    isSender={msg.sender_id === user.id}
+                    content={msg.content}
+                    timestamp={new Date(msg.created_at).toLocaleTimeString()}
+                  />
+                ))}
+                <div id="scroll-anchor" />
+              </div>
+
+              {/* Message Input */}
+              <MessageInput onSend={handleSend} />
             </div>
-
-            {/* Message Input */}
-            <MessageInput onSend={handleSend} />
-          </>
+          </div>
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-500">
             Select a chat to start messaging
           </div>
         )}
       </div>
+
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabaseClient'
+import ChatBubble from '@/components/ChatBubble'
 
 export default function ChatsPage() {
   const [user, setUser] = useState<any>(null)
@@ -30,12 +31,42 @@ export default function ChatsPage() {
   const loadChats = async (userId: string) => {
     const { data, error } = await supabase
       .from('chat_members')
-      .select('chat_id, chats(id, is_group, created_at)')
+      .select(`
+      chat_id,
+      chats (
+        id,
+        title,
+        avatar_url,
+        is_group,
+        created_at,
+        messages (
+          created_at
+        )
+      )
+    `)
       .eq('user_id', userId)
 
-    if (error) console.error(error)
-    else setChats(data.map((d: any) => d.chats))
+    if (error) {
+      console.error('Error loading chats:', error)
+      return
+    }
+
+    // Flatten and sort by latest message timestamp
+    const chatsWithLatest = data.map((item: any) => {
+      const messages = item.chats.messages
+      const latestMessage = messages?.[messages.length - 1]
+      return {
+        ...item.chats,
+        lastActive: latestMessage?.created_at || item.chats.created_at,
+      }
+    })
+
+    // Sort: latest activity first
+    chatsWithLatest.sort((a, b) => new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime())
+
+    setChats(chatsWithLatest)
   }
+
 
   // Fetch messages for selected chat
   const fetchMessages = async (chatId: string) => {
@@ -95,8 +126,13 @@ export default function ChatsPage() {
   }
 
 
-  if (loading) return <div className="p-4">Loading chats...</div>
 
+  // 👇 Scroll to bottom whenever messages change
+  useEffect(() => {
+    const el = document.getElementById('scroll-anchor')
+    el?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+  if (loading) return <div className="p-4">Loading chats...</div>
   return (
     <div className="flex h-screen">
       {/* Sidebar */}
@@ -142,26 +178,24 @@ export default function ChatsPage() {
 
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-chat-pattern">
+        {/* Messages */}
+<div
+  className="flex-1 overflow-y-auto p-4 space-y-2 bg-[url('/bg.png')] bg-repeat bg-cover"
+  id="chat-container"
+>
+  {messages.map((msg) => (
+    <ChatBubble
+      key={msg.id}
+      isSender={msg.sender_id === user.id}
+      content={msg.content}
+      timestamp={new Date(msg.created_at).toLocaleTimeString()}
+    />
+  ))}
+  <div id="scroll-anchor" />
+</div>
 
 
 
-
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`p-2 rounded-md max-w-[70%] break-words ${msg.sender_id === user.id
-                ? 'bg-blue-500 text-white ml-auto'
-                : 'bg-gray-200 text-black mr-auto'
-                }`}
-            >
-              <div>{msg.content}</div>
-              <div className="text-xs text-right mt-1 opacity-60">
-                {new Date(msg.created_at).toLocaleTimeString()}
-              </div>
-            </div>
-          ))}
-        </div>
 
 
         {/* Input */}
@@ -183,6 +217,8 @@ export default function ChatsPage() {
           </div>
 
         )}
+
+
       </div>
     </div>
   )

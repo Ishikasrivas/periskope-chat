@@ -1,17 +1,11 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* global.css or tailwind.config.css */
-/* globals.css */
-@layer utilities {
- .bg-chat-pattern {
-  background-image: url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png');
+
+.bg {
+  background-image: url('/public/bg.png');
   background-repeat: repeat;
-  background-size: contain;
+  background-size: cover;
 }
-
-}
-
-
 
 

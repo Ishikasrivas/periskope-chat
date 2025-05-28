@@ -11,50 +11,76 @@ interface SidebarProps {
 export default function Sidebar({ onSelectChat, selectedChatId }: SidebarProps) {
   const [chats, setChats] = useState<any[]>([])
   const [userId, setUserId] = useState<string | null>(null)
-useEffect(() => {
-  const getUserAndFetchChats = async () => {
-    const { data } = await supabase.auth.getUser()
-    const userId = data.user?.id
-    if (!userId) return
+  useEffect(() => {
+    const getUserAndFetchChats = async () => {
+      const { data } = await supabase.auth.getUser()
+      const userId = data.user?.id
+      if (!userId) return
+      setUserId(userId)
 
-    setUserId(userId) // optional
+      const fetchChats = async () => {
+        const { data: chatData } = await supabase
+          .from('chat_members')
+          .select('chat_id, chats (id, created_at, title, avatar_url, is_group, tags)')
+          .eq('user_id', userId)
 
-    const { data: chatData } = await supabase
-      .from('chat_members')
-      .select('chat_id, chats (id, created_at, title, avatar_url, is_group, tags)')
-      .eq('user_id', userId)
+        const baseChats = chatData?.map((item: any) => item.chats) ?? []
 
-    const baseChats = chatData?.map((item: any) => item.chats) ?? []
+        const enrichedChats = await Promise.all(
+          baseChats.map(async (chat: any) => {
+            const { data: messageData } = await supabase
+              .from('messages')
+              .select('content, created_at')
+              .eq('chat_id', chat.id)
+              .order('created_at', { ascending: false })
+              .limit(1)
 
-    const enrichedChats = await Promise.all(
-      baseChats.map(async (chat: any) => {
-        const { data: messageData } = await supabase
-          .from('messages')
-          .select('content, created_at')
-          .eq('chat_id', chat.id)
-          .order('created_at', { ascending: false })
-          .limit(1)
+            return {
+              ...chat,
+              lastMessage: messageData?.[0]?.content || '',
+              lastMessageTime: messageData?.[0]?.created_at || ''
+            }
+          })
+        )
 
-        return {
-          ...chat,
-          lastMessage: messageData?.[0]?.content || '',
-          lastMessageTime: messageData?.[0]?.created_at || ''
-        }
-      })
-    )
+        // Sort by latest message
+        enrichedChats.sort((a, b) => {
+          const aTime = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0
+          const bTime = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0
+          return bTime - aTime
+        })
 
-    // 🔽 Sort chats by last message time (descending)
-    enrichedChats.sort((a, b) => {
-      const aTime = a.lastMessageTime ? new Date(a.lastMessageTime).getTime() : 0
-      const bTime = b.lastMessageTime ? new Date(b.lastMessageTime).getTime() : 0
-      return bTime - aTime
-    })
+        setChats(enrichedChats)
+      }
 
-    setChats(enrichedChats)
-  }
+      await fetchChats()
 
-  getUserAndFetchChats()
-}, [])
+      // 👇 Subscribe to new message inserts
+      const messageSub = supabase
+        .channel('messages-updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'messages'
+          },
+          (payload) => {
+            // New message inserted — refetch chats
+            fetchChats()
+          }
+        )
+        .subscribe()
+
+      // Clean up subscription on unmount
+      return () => {
+        supabase.removeChannel(messageSub)
+      }
+    }
+
+    getUserAndFetchChats()
+  }, [])
+
 
   // // Get current user
   // useEffect(() => {
@@ -115,7 +141,7 @@ useEffect(() => {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <div className="w-8 h-8 rounded-full bg-green-600 text-white flex items-center justify-center font-bold">
-          P
+          W
         </div>
         <button className="text-sm text-blue-500">Save</button>
       </div>
@@ -123,6 +149,7 @@ useEffect(() => {
       {/* Filter */}
       <div className="px-4 py-2 border-b">
         <div className="text-sm font-semibold text-green-600">Custom filter</div>
+        
         <div className="flex items-center gap-2 mt-2">
           <input
             type="text"
@@ -134,7 +161,9 @@ useEffect(() => {
       </div>
 
       {/* Chat List */}
-      <div className="overflow-y-auto flex-1">
+      <div
+        className="overflow-y-auto flex-1 bg-[url('/images/bg.png')] bg-repeat bg-cover"
+      >
         {chats.map((chat) => (
           <div
             key={chat.id}
