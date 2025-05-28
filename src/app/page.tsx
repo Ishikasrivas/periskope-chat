@@ -15,6 +15,7 @@ export default function ChatsPage() {
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
   const [selectedChat, setSelectedChat] = useState<any>(null)
   const [loadingUser, setLoadingUser] = useState(true)
+  const [loadingChat, setLoadingChat] = useState(false)
   const router = useRouter()
 
   // 🔐 Load user session
@@ -30,11 +31,13 @@ export default function ChatsPage() {
     })
   }, [])
 
-  // 📩 Load messages + chat metadata + realtime
+  // 📩 Load messages + chat metadata + realtime updates
   useEffect(() => {
     if (!selectedChatId) return
 
     const fetchChatData = async () => {
+      setLoadingChat(true)
+
       // 1. Fetch messages
       const { data: messagesData, error: msgError } = await supabase
         .from('messages')
@@ -54,6 +57,8 @@ export default function ChatsPage() {
 
       if (chatError) console.error("Error fetching chat info:", chatError)
       setSelectedChat(chatData || null)
+
+      setLoadingChat(false)
     }
 
     fetchChatData()
@@ -71,6 +76,7 @@ export default function ChatsPage() {
         },
         (payload) => {
           setMessages((prev) => [...prev, payload.new])
+          document.getElementById("scroll-anchor")?.scrollIntoView({ behavior: 'smooth' })
         }
       )
       .subscribe()
@@ -80,25 +86,9 @@ export default function ChatsPage() {
     }
   }, [selectedChatId])
 
-  // ✅ Move this OUTSIDE of useEffect
-  const onChatClick = async (chatId: string) => {
+  // ✅ Simplified chat selection
+  const onChatClick = (chatId: string) => {
     setSelectedChatId(chatId)
-
-    const { data: messagesData } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('chat_id', chatId)
-      .order('created_at', { ascending: true })
-
-    setMessages(messagesData || [])
-
-    const { data: chatData } = await supabase
-      .from('chats')
-      .select('*')
-      .eq('id', chatId)
-      .single()
-
-    setSelectedChat(chatData || null)
   }
 
   // ✉️ Handle message sending
@@ -112,9 +102,11 @@ export default function ChatsPage() {
         content: text,
       },
     ])
+
+    document.getElementById("scroll-anchor")?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  if (loadingUser) return <div className="p-6">Loading...</div>
+  if (loadingUser) return <div className="p-6">Loading user...</div>
 
   return (
     <div className="flex h-screen">
@@ -140,17 +132,21 @@ export default function ChatsPage() {
               <ChatHeader chat={selectedChat} />
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {messages.map((msg) => (
-                  <ChatBubble
-                    key={msg.id}
-                    isSender={msg.sender_id === user.id}
-                    content={msg.content}
-                    timestamp={new Date(msg.created_at).toLocaleTimeString()}
-                  />
-                ))}
-                <div id="scroll-anchor" />
-              </div>
+              {loadingChat ? (
+                <div className="p-6 text-gray-500">Loading chat...</div>
+              ) : (
+                <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                  {messages.map((msg) => (
+                    <ChatBubble
+                      key={msg.id}
+                      isSender={msg.sender_id === user.id}
+                      content={msg.content}
+                      timestamp={new Date(msg.created_at).toLocaleTimeString()}
+                    />
+                  ))}
+                  <div id="scroll-anchor" />
+                </div>
+              )}
 
               {/* Message Input */}
               <MessageInput onSend={handleSend} />
@@ -162,7 +158,6 @@ export default function ChatsPage() {
           </div>
         )}
       </div>
-
     </div>
   )
 }
