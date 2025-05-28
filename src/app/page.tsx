@@ -8,20 +8,49 @@ import Sidebar from '../components/Sidebar'
 import ChatHeader from '../components/ChatHeader'
 import ChatBubble from '../components/ChatBubble'
 import MessageInput from '../components/MessageInput'
+// Remove this line, since Database is not exported from your supabaseClient file
+// import type { Database } from '@/lib/supabaseClient'
+
+import type { Session, User } from '@supabase/supabase-js'
+
+// Helper type to get your table row type, adjust if you have your own
+// Replace this with the actual row types for your tables if you have generated types from Supabase.
+// For now, this is a fallback so TypeScript doesn't complain.
+type Tables<T extends 'messages' | 'chats'> =
+  T extends 'messages'
+    ? {
+        id: string
+        chat_id: string
+        sender_id: string
+        content: string
+        created_at: string
+        // Add other fields from your messages table as needed
+      }
+    : T extends 'chats'
+    ? {
+        id: string
+        title: string
+        tags: string[] | null
+        avatar_url: string | null
+        is_group: boolean
+        // Add other fields from your chats table as needed
+      }
+    : never
 
 export default function ChatsPage() {
-  const [user, setUser] = useState<any>(null)
-  const [messages, setMessages] = useState<any[]>([])
+  const router = useRouter()
+
+  const [user, setUser] = useState<User | null>(null)
+  const [messages, setMessages] = useState<Tables<'messages'>[]>([])
   const [selectedChatId, setSelectedChatId] = useState<string | null>(null)
-  const [selectedChat, setSelectedChat] = useState<any>(null)
+  const [selectedChat, setSelectedChat] = useState<Tables<'chats'> | null>(null)
   const [loadingUser, setLoadingUser] = useState(true)
   const [loadingChat, setLoadingChat] = useState(false)
-  const router = useRouter()
 
   // 🔐 Load user session
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      const sessionUser = data.session?.user
+      const sessionUser = data.session?.user ?? null
       if (!sessionUser) {
         router.push('/')
       } else {
@@ -29,7 +58,7 @@ export default function ChatsPage() {
         setLoadingUser(false)
       }
     })
-  }, [])
+  }, [router])
 
   // 📩 Load messages + chat metadata + realtime updates
   useEffect(() => {
@@ -45,8 +74,8 @@ export default function ChatsPage() {
         .eq('chat_id', selectedChatId)
         .order('created_at', { ascending: true })
 
-      if (msgError) console.error("Error fetching messages:", msgError)
-      setMessages(messagesData || [])
+      if (msgError) console.error('Error fetching messages:', msgError)
+      setMessages(messagesData ?? [])
 
       // 2. Fetch chat metadata
       const { data: chatData, error: chatError } = await supabase
@@ -55,8 +84,8 @@ export default function ChatsPage() {
         .eq('id', selectedChatId)
         .single()
 
-      if (chatError) console.error("Error fetching chat info:", chatError)
-      setSelectedChat(chatData || null)
+      if (chatError) console.error('Error fetching chat info:', chatError)
+      setSelectedChat(chatData ?? null)
 
       setLoadingChat(false)
     }
@@ -75,8 +104,8 @@ export default function ChatsPage() {
           filter: `chat_id=eq.${selectedChatId}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new])
-          document.getElementById("scroll-anchor")?.scrollIntoView({ behavior: 'smooth' })
+          setMessages((prev) => [...prev, payload.new as Tables<'messages'>])
+          document.getElementById('scroll-anchor')?.scrollIntoView({ behavior: 'smooth' })
         }
       )
       .subscribe()
@@ -95,7 +124,7 @@ export default function ChatsPage() {
   const handleSend = async (text: string) => {
     if (!user || !selectedChatId) return
 
-    await supabase.from('messages').insert([
+    const { error } = await supabase.from('messages').insert([
       {
         chat_id: selectedChatId,
         sender_id: user.id,
@@ -103,7 +132,11 @@ export default function ChatsPage() {
       },
     ])
 
-    document.getElementById("scroll-anchor")?.scrollIntoView({ behavior: 'smooth' })
+    if (error) {
+      console.error('Error sending message:', error)
+    } else {
+      document.getElementById('scroll-anchor')?.scrollIntoView({ behavior: 'smooth' })
+    }
   }
 
   if (loadingUser) return <div className="p-6">Loading user...</div>
@@ -114,10 +147,7 @@ export default function ChatsPage() {
       <SidebarNav />
 
       {/* Sidebar Chat List */}
-      <Sidebar
-        onSelectChat={onChatClick}
-        selectedChatId={selectedChatId}
-      />
+      <Sidebar onSelectChat={onChatClick} selectedChatId={selectedChatId} />
 
       {/* Chat Area */}
       <div className="flex flex-col flex-1">
@@ -139,7 +169,7 @@ export default function ChatsPage() {
                   {messages.map((msg) => (
                     <ChatBubble
                       key={msg.id}
-                      isSender={msg.sender_id === user.id}
+                      isSender={msg.sender_id === user?.id}
                       content={msg.content}
                       timestamp={new Date(msg.created_at).toLocaleTimeString()}
                     />
